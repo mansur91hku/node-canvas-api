@@ -22,6 +22,15 @@ const requestObj = {
 const fetchAll = async (url, result = []) => {
   const response = await nodeFetch(url, requestObj)
   const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.errors ? JSON.stringify(data.errors) : data.message || JSON.stringify(data))
+  }
+
+  if (!Array.isArray(data)) {
+    throw new Error('API response is not an array: ' + JSON.stringify(data))
+  }
+
   result = [...result, ...data]
 
   const links = linkparser(response.headers.get('link'))

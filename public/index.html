@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas API Dashboard</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+        button { padding: 10px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 3px; }
+        button:hover { background-color: #0056b3; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+        .hidden { display: none; }
+        input { padding: 8px; margin-right: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Canvas API Dashboard</h1>
+
+    <div class="card">
+        <h2>1. My Information</h2>
+        <button onclick="getSelf()">Get My Info</button>
+        <div id="self-result" class="hidden">
+            <h3>My Details:</h3>
+            <pre id="self-output"></pre>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>2. My Courses</h2>
+        <p>User ID: <input type="text" id="user-id-input" placeholder="Enter User ID"></p>
+        <button onclick="getCourses()">Get Courses</button>
+        <div id="courses-result" class="hidden">
+            <h3>Courses:</h3>
+            <ul id="courses-list"></ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>3. Course Students</h2>
+        <p>Course ID: <input type="text" id="course-id-input" placeholder="Enter Course ID"></p>
+        <button onclick="getStudents()">Get Students</button>
+        <div id="students-result" class="hidden">
+            <h3>Students:</h3>
+            <ul id="students-list"></ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>4. Advanced: Run Any Script</h2>
+        <p>Select a function to run:</p>
+        <select id="function-select" onchange="updatePlaceholder()">
+            <option value="">-- Select a function --</option>
+        </select>
+        
+        <p>Arguments (JSON Array):</p>
+        <textarea id="args-input" rows="3" style="width: 100%;" placeholder='e.g. [12345] or [12345, "student"]'></textarea>
+        <p><small>Enter arguments as a JSON array. E.g., for <code>getUsersInCourse(123, "student")</code>, enter <code>[123, "student"]</code>.</small></p>
+        
+        <button onclick="runGenericFunction()">Run Function</button>
+        
+        <div id="generic-result" class="hidden">
+            <h3>Result:</h3>
+            <pre id="generic-output"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Load function list on startup
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/list-functions');
+                const functions = await response.json();
+                const select = document.getElementById('function-select');
+                functions.forEach(fn => {
+                    const option = document.createElement('option');
+                    option.value = fn;
+                    option.textContent = fn;
+                    select.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Failed to load functions', err);
+            }
+        });
+
+        function updatePlaceholder() {
+            // Optional: Could add specific hints per function if we had metadata
+        }
+
+        async function runGenericFunction() {
+            const functionName = document.getElementById('function-select').value;
+            const argsText = document.getElementById('args-input').value.trim();
+            const output = document.getElementById('generic-output');
+            const resultDiv = document.getElementById('generic-result');
+
+            if (!functionName) { alert('Please select a function'); return; }
+
+            let args = [];
+            if (argsText) {
+                try {
+                    args = JSON.parse(argsText);
+                    if (!Array.isArray(args)) {
+                        throw new Error('Arguments must be a JSON array (enclosed in [])');
+                    }
+                } catch (e) {
+                    alert('Invalid JSON arguments: ' + e.message);
+                    return;
+                }
+            }
+
+            output.textContent = 'Running...';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ functionName, args })
+                });
+                const data = await response.json();
+                output.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                output.textContent = 'Error: ' + err.message;
+            }
+        }
+
+        async function getSelf() {
+            const output = document.getElementById('self-output');
+            const resultDiv = document.getElementById('self-result');
+            const userIdInput = document.getElementById('user-id-input');
+            
+            output.textContent = 'Loading...';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/self');
+                const data = await response.json();
+                output.textContent = JSON.stringify(data, null, 2);
+                
+                // Auto-fill User ID for the next step
+                if (data.id) {
+                    userIdInput.value = data.id;
+                }
+            } catch (err) {
+                output.textContent = 'Error: ' + err.message;
+            }
+        }
+
+        async function getCourses() {
+            const userId = document.getElementById('user-id-input').value;
+            const list = document.getElementById('courses-list');
+            const resultDiv = document.getElementById('courses-result');
+            
+            if (!userId) { alert('Please enter a User ID first (or click Get My Info)'); return; }
+
+            list.innerHTML = '<li>Loading...</li>';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/api/courses?userId=${userId}`);
+                const data = await response.json();
+                list.innerHTML = '';
+                
+                if (data.length === 0) {
+                    list.innerHTML = '<li>No courses found.</li>';
+                    return;
+                }
+
+                data.forEach(course => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>${course.name}</strong> (ID: ${course.id}) <button onclick="fillCourseId(${course.id})" style="padding: 2px 5px; font-size: 0.8em;">Select</button>`;
+                    list.appendChild(li);
+                });
+            } catch (err) {
+                list.innerHTML = `<li>Error: ${err.message}</li>`;
+            }
+        }
+
+        function fillCourseId(id) {
+            document.getElementById('course-id-input').value = id;
+        }
+
+        async function getStudents() {
+            const courseId = document.getElementById('course-id-input').value;
+            const list = document.getElementById('students-list');
+            const resultDiv = document.getElementById('students-result');
+
+            if (!courseId) { alert('Please enter a Course ID'); return; }
+
+            list.innerHTML = '<li>Loading...</li>';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/api/students?courseId=${courseId}`);
+                const data = await response.json();
+                list.innerHTML = '';
+
+                if (data.length === 0) {
+                    list.innerHTML = '<li>No students found.</li>';
+                    return;
+                }
+
+                data.forEach(student => {
+                    const li = document.createElement('li');
+                    li.textContent = `${student.name} (ID: ${student.id})`;
+                    list.appendChild(li);
+                });
+            } catch (err) {
+                list.innerHTML = `<li>Error: ${err.message}</li>`;
+            }
+        }
+    </script>
+</body>
+</html>
