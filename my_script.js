@@ -1,8 +1,10 @@
-import { getCoursesByUser } from './src/index.js';
+import { getCoursesByUser, getSelf } from './src/index.js';
 
-const userId = 119696101; // User ID from getSelf()
+console.log(`Fetching self...`);
+const user = await getSelf();
+const userId = user.id;
 
-console.log(`Fetching courses for user ${userId}...`);
+console.log(`Fetching courses for user ${userId} (${user.name})...`);
 
 try {
   const courses = await getCoursesByUser(userId);
